@@ -1,14 +1,11 @@
 import Ajv from 'ajv';
 import * as cors from 'cors';
-import * as dotenv from 'dotenv';
 import * as express from 'express';
 import * as admin from 'firebase-admin';
 import * as functions from 'firebase-functions';
 import { nanoid } from 'nanoid';
 import { InvalidOperationError, KeyNotFoundError, ValidationError } from './errorTypes';
 import { isVictory, tryUpdate } from './utils';
-
-dotenv.config();
 
 const ajv = new Ajv();
 const updateSchema = {

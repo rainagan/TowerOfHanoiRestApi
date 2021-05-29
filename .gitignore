@@ -1,3 +1,9 @@
+.DS_Store
+dist
+package-lock.json
+*.orig
+gen/
+
 # Logs
 logs
 *.log
@@ -18,6 +24,7 @@ functions/*
 
 # Firebase cache
 .firebase/
+.firebaserc
 
 # Firebase service account private key
 FirebasePermissionKey.json
@@ -73,10 +80,16 @@ node_modules/
 .yarn-integrity
 
 # dotenv environment variables file
+.env.local
+.env.*.local
 .env
 
 # Runtime generated config file
 .runtimeconfig.json
 
+# Editor directories and files
+.idea
 .vs
 .vscode
+*.suo
+*.ntvs*
