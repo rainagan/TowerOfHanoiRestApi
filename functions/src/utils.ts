@@ -1,34 +1,35 @@
-import { InvalidOperationError, KeyNotFoundError, ValidationError } from "./errorTypes";
+import Ajv from 'ajv';
+import { InvalidOperationError, KeyNotFoundError, ValidationError } from './errorTypes';
 
-/**
- * Check if the specified game meets victory 
- * @param documentData
- * @return true if victory is meet; otherwise false
- */
-export function isVictory(documentData: FirebaseFirestore.DocumentData): boolean {
-    const rod1 = documentData.rod1 as number[];
-    const rod2 = documentData.rod2 as number[];
-    const rod3 = documentData.rod3 as number[];
-
-    return rod1.length === 0
-        && rod2.length === 0
-        && rod3.length === 4
-        && areDisksAscending(rod3);
+const ajv = new Ajv();
+const updateSchema = {
+    type: 'object',
+    properties: {
+        from: {type: 'string', nullable: false},
+        to: {type: 'string', nullable: false}
+    },
+    required: ['from', 'to'],
+    additionalProperties: false
 }
+const validate = ajv.compile(updateSchema);
 
 /**
- * Check if the proposed move is valid
- * @param requestBody
- * @param documentRef
- * @returns true if the proposed move is valid; false otherwise 
+ * Update a specified game state if the attempt move is valid
+ * @param requestBody The request body 
+ * @param documentRef The reference to the specified Firestore Document 
+ * @returns A Promise resolved with an updated document data 
+ * @throws {ValidationError} Request must in the format { 'from':'rod1'/'rod2'/'rod3', 'to:'rod1'/'rod2'/'rod3' }. Also, values for 'from' and 'to' must not match
+ * @throws {KeyNotFoundError} Specified data must exist in the database
+ * @throws {InvalidOperationError} A move is only valid when moving a disk to an empty rod, or moving a smaller disk onto a larger one 
  */
 export async function tryUpdate(
     requestBody: any,
-    documentRef: FirebaseFirestore.DocumentReference<FirebaseFirestore.DocumentData>) {
+    documentRef: FirebaseFirestore.DocumentReference<FirebaseFirestore.DocumentData>): Promise<any> {
         const fromRod = requestBody.from;
         const toRod = requestBody.to;
-        if (!isValidRod(fromRod, toRod)) {
-            throw new ValidationError(`Invalid request: ${requestBody}`);
+
+        if (!validate(requestBody) || !isValidRod(fromRod, toRod)) {
+            throw new ValidationError(`Invalid request: ${JSON.stringify(requestBody)}`);
         }
 
         const documentData = await documentRef
@@ -66,25 +67,65 @@ export async function tryUpdate(
         return documentData;
 }
 
+/**
+ * Build a string response body that will send back to the client
+ * @param resultObject A result object that needs to be stringified
+ * @param prefix An optional string that can be added before the stringified resultObject
+ * @returns The built-up string response
+ */
+export function buildResponseBody(resultObject: any, prefix = ''): string {
+    const victory = isVictory(resultObject);
+    const stateResult = JSON.stringify(resultObject).concat(`\nIs victory: ${victory}`);
+    return prefix === ''
+        ? stateResult
+        : prefix.concat(stateResult);
+}
+
+/**
+ * Check if the specified 'from' and 'to' rods are valid
+ * @param fromRod The rod to move a disk from
+ * @param toRod The rod to move a disk to
+ * @returns True if both specified rods are valid
+ */
 function isValidRod(fromRod: string, toRod: string): boolean {
     const validRods = ['rod1', 'rod2', 'rod3'];
     return validRods.indexOf(fromRod) > -1
-        && validRods.indexOf(toRod) > -1
-        && fromRod !== toRod;
+        && validRods.indexOf(toRod) > -1;
 }
 
- function areDisksAscending(diskStack: number[]): boolean {
-    const stackLength = diskStack.length;
+/**
+ * Check if disks are stacked with their diameters in ascending order (the upper disk is smaller than the one underneath) 
+ * @param disks A number[] indicating disks with different diameters
+ * @returns True if disks are stacked with their diameters in ascending order
+ */
+function areDisksAscending(disks: number[]): boolean {
+    const stackLength = disks.length;
 
     if (stackLength === 0) {
         return true;
     }
 
-    for (let diskNumber = 0; diskNumber < diskStack.length - 1; diskNumber++) {
-        if (diskStack[diskNumber] >= diskStack[diskNumber + 1]) {
+    for (let diskNumber = 0; diskNumber < disks.length - 1; diskNumber++) {
+        if (disks[diskNumber] >= disks[diskNumber + 1]) {
             return false;
         }
     }
 
     return true;
+}
+
+/**
+ * Check if the specified game meets victory 
+ * @param data The data to be checked
+ * @return True if victory is meet; otherwise false
+ */
+ function isVictory(data: any): boolean {
+    const rod1 = data.rod1 as number[];
+    const rod2 = data.rod2 as number[];
+    const rod3 = data.rod3 as number[];
+
+    return rod1.length === 0
+        && rod2.length === 0
+        && rod3.length === 4
+        && areDisksAscending(rod3);
 }

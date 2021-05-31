@@ -16,7 +16,7 @@ firebase-debug.*.log*
 # Firebase cloud functions
 functions/*
 !functions/src
-!functions/test
+!functions/__tests__
 !functions/jest.config.js
 !functions/package.json
 !functions/tsconfig.json

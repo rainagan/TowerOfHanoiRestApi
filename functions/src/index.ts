@@ -1,23 +1,10 @@
-import Ajv from 'ajv';
 import * as cors from 'cors';
 import * as express from 'express';
 import * as admin from 'firebase-admin';
 import * as functions from 'firebase-functions';
 import { nanoid } from 'nanoid';
 import { InvalidOperationError, KeyNotFoundError, ValidationError } from './errorTypes';
-import { isVictory, tryUpdate } from './utils';
-
-const ajv = new Ajv();
-const updateSchema = {
-    type: "object",
-    properties: {
-        from: {type: "string", nullable: false},
-        to: {type: "string", nullable: false}
-    },
-    required: ["from", "to"],
-    additionalProperties: false
-}
-const validate = ajv.compile(updateSchema);
+import { buildResponseBody, tryUpdate } from './utils';
 
 admin.initializeApp({
     credential: admin.credential.cert({
@@ -53,7 +40,7 @@ app.post('/create', async (_req, res) => {
     await document
         .create(gameState)
         .then(() => {
-            res.status(201).send(`Created a new game: ${JSON.stringify(gameState)}`);
+            res.status(201).send(buildResponseBody(gameState, 'Created a new game: '));
         })
         .catch((error) => {
             errorHandler(error, res);
@@ -70,8 +57,7 @@ app.get('/read/:gameId', async (req, res) => {
                 throw new KeyNotFoundError();
             } else {
                 const documentData = doc.data();
-                const victory = isVictory(documentData!);
-                const response = JSON.stringify(documentData).concat(`\nIs victory: ${victory}`);
+                const response = buildResponseBody(documentData);
 
                 res.status(200).send(response);
             }
@@ -84,20 +70,11 @@ app.get('/read/:gameId', async (req, res) => {
 // Update
 app.put('/update/:gameId', async (req, res) => {
     try {
-        const requestBody = req.body;
-        if (!validate(requestBody)) {
-            throw new ValidationError(`Invalid request: ${requestBody}`);
-        }
-        
         const document = gameCollection.doc(req.params.gameId.trim());
 
-        await tryUpdate(requestBody, document)
+        await tryUpdate(req.body, document)
             .then((result) => {
-                const victory = isVictory(result);
-
-                const response = `Updated game state to: ${JSON.stringify(result)}\nIs victory: ${victory}`;
-
-                res.status(200).send(response);
+                res.status(200).send(buildResponseBody(result, 'Updated game state to: '));
             });
     } catch (error) {
         errorHandler(error, res);
@@ -117,8 +94,7 @@ app.delete('/delete/:gameId', async (req, res) => {
                 } 
             });
 
-        await gameCollection
-            .doc(gameId)
+        await document
             .delete()
             .then(() => {
                 res.status(200).send(`Deleted game session: ${gameId}`);
@@ -128,20 +104,16 @@ app.delete('/delete/:gameId', async (req, res) => {
     }
 });
 
-export { app };
+function errorHandler(error: Error, res: any) {
+    console.log(error);
 
-function errorHandler(
-    error: Error,
-    res: any) {
-        console.log(error);
-
-        if (error instanceof KeyNotFoundError) {
-            res.status(404).send(error.message);
-        } else if (error instanceof ValidationError) {
-            res.status(400).send(error.message);
-        } else if (error instanceof InvalidOperationError) {
-            res.status(403).send(error.message);
-        } else{
-            res.status(500).send('Unable to update game state');
-        }
+    if (error instanceof KeyNotFoundError) {
+        res.status(404).send(error.message);
+    } else if (error instanceof ValidationError) {
+        res.status(400).send(error.message);
+    } else if (error instanceof InvalidOperationError) {
+        res.status(403).send(error.message);
+    } else {
+        res.status(500).send('Unable to update game state');
+    }
 }
